@@ -1,0 +1,2 @@
+* Question: Explain this statement `from vllm import LLM, SamplingParams`
+    > Answer: vllm is a python `module` and LLM and SamplingParams are two `classes` defined under this module. In Python, a module is a folder that has a `__init__.py` file, which lists all the exported classes defined in python files under this module/folder. Go to `/home/benke/Workspace/vLLM/vllm/vllm/__init__.py` and find LLM and SamplingParams
