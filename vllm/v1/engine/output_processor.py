@@ -106,7 +106,6 @@ class OutputProcessorOutput:
     request_outputs: list[RequestOutput | PoolingRequestOutput]
     reqs_to_abort: list[str]
 
-
 @dataclass
 class StreamingUpdate:
     """Streaming input update data for output processor.
@@ -120,7 +119,10 @@ class StreamingUpdate:
     arrival_time: float
     final: bool = False
 
-
+# -------------------------------------------------------------------------------------------------------------------
+# Request state from its input info, processing state, and output info.
+# It's a per-request tracking object or stateful companion of each request
+# -------------------------------------------------------------------------------------------------------------------
 class RequestState:
     def __init__(
         self,
@@ -418,6 +420,9 @@ class OutputProcessor:
         self.log_stats = log_stats
         self.tokenizer = tokenizer
         self.stream_interval = stream_interval
+        # --------------------------------------------------------------------------------------------
+        # Tracking each ongoing request status on CPU side
+        # --------------------------------------------------------------------------------------------
         self.request_states: dict[str, RequestState] = {}
         self.parent_requests: dict[str, ParentRequest] = {}
         self.external_req_ids: defaultdict[str, list[str]] = defaultdict(list)

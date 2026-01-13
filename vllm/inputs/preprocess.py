@@ -355,6 +355,10 @@ class InputPreprocessor:
 
         return inputs
 
+    # -------------------------------------------------------------------------------------------------------------------
+    # If input is text/string(str->text), then tokenize it first,
+    # i.e. change the input string/text into a list of token IDs (ints)
+    # -------------------------------------------------------------------------------------------------------------------
     def _process_text(
         self,
         parsed_content: TextPrompt,

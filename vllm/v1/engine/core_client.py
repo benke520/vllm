@@ -255,6 +255,9 @@ class EngineCoreClient(ABC):
         raise NotImplementedError
 
 
+# ---------------------------------------------------------------------------------------------------------
+# Focus on this the
+# ---------------------------------------------------------------------------------------------------------
 class InprocClient(EngineCoreClient):
     """
     InprocClient: client for in-process EngineCore. Intended

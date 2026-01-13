@@ -42,6 +42,9 @@ from vllm.v1.structured_output.backend_xgrammar import validate_xgrammar_grammar
 logger = init_logger(__name__)
 
 
+# -------------------------------------------------------------------------------------------------------------------
+# This is the class that translate input prompts and parameters into a request type required by the BE LLM engine
+# -------------------------------------------------------------------------------------------------------------------
 class InputProcessor:
     def __init__(
         self,
@@ -514,6 +517,9 @@ class InputProcessor:
                 num_threads,
             )
 
+        # -------------------------------------------------------------------------------------------------------------
+        # This does the job to tokenize input string/text into a list of token IDs, i.e., tokenization
+        # -------------------------------------------------------------------------------------------------------------
         with set_request_id(request_id), set_default_torch_num_threads(num_threads):
             processed_inputs: ProcessorInputs = self.input_preprocessor.preprocess(
                 prompt,
@@ -542,6 +548,9 @@ class InputProcessor:
             prompt_token_ids = decoder_inputs["prompt_token_ids"]
             prompt_embeds = None
 
+        # -------------------------------------------------------------------------------------------------------------------
+        # Proces the input parameters
+        # -------------------------------------------------------------------------------------------------------------------
         sampling_params = None
         pooling_params = None
         if isinstance(params, SamplingParams):
@@ -590,6 +599,9 @@ class InputProcessor:
                     )
                 )
 
+        # -------------------------------------------------------------------------------------------------------------------
+        # Wrap the input prompt tokens and parameters into a single Request object and pass it to the downstream LLM engine
+        # -------------------------------------------------------------------------------------------------------------------
         return EngineCoreRequest(
             request_id=request_id,
             prompt_token_ids=prompt_token_ids,

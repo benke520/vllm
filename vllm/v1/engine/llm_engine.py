@@ -264,6 +264,10 @@ class LLMEngine:
             self.engine_core.add_request(request)
             return
 
+        # -------------------------------------------------------------------------------------------------------------------
+        # when n > 1, it means we want to generate n (candidate) responses in parallel for the single request.
+        # See the comment in ParentRequest
+        # -------------------------------------------------------------------------------------------------------------------
         # Fan out child requests (for n>1).
         parent_req = ParentRequest(request)
         for idx in range(n):
@@ -272,10 +276,16 @@ class LLMEngine:
             child_request.request_id = request_id
             child_request.sampling_params = child_params
 
+            # ------------------------------------------------------------------------
+            # Tracking each ongoing request status on CPU side
+            # ------------------------------------------------------------------------
             # Make a new RequestState and queue.
             self.output_processor.add_request(
                 child_request, prompt_text, parent_req, idx
             )
+            # ------------------------------------------------------------------------
+            # Enqueuing the request to GPU for computation
+            # ------------------------------------------------------------------------
             # Add the request to EngineCore.
             self.engine_core.add_request(child_request)
 
