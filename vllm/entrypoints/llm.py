@@ -1612,6 +1612,9 @@ class LLM:
 
         added_request_ids: list[str] = []
 
+        # ----------------------------------------------------------------------------------------------------------------------
+        # [Ben][1/12/26] This is the entrance that FE llm translate each prompt into a request for the BE llm engine to handle
+        # ----------------------------------------------------------------------------------------------------------------------
         try:
             for i, prompt in enumerate(it):
                 if isinstance(prompt, dict):
@@ -1681,6 +1684,10 @@ class LLM:
                         f" but UUID is not provided"
                     )
 
+    # --------------------------------------------------------------------------------------------------
+    # Delegate the input prompt and parameters processing to input processor,
+    # which is dedicated to do the translation work
+    # --------------------------------------------------------------------------------------------------
     def _process_inputs(
         self,
         request_id: str,
@@ -1722,6 +1729,9 @@ class LLM:
         prompt_text, _, _ = get_prompt_components(prompt)
         request_id = str(next(self.request_counter))
 
+        # ---------------------------------------------------------------------------
+        # Step 1. Wrap input prompt into a BE request
+        # ---------------------------------------------------------------------------
         engine_request, tokenization_kwargs = self._process_inputs(
             request_id,
             prompt,
@@ -1731,6 +1741,9 @@ class LLM:
             tokenization_kwargs=tokenization_kwargs,
         )
 
+        # ---------------------------------------------------------------------------
+        # Step 2. Enqueue the BE request into LLM engine
+        # ---------------------------------------------------------------------------
         self.llm_engine.add_request(
             request_id,
             engine_request,

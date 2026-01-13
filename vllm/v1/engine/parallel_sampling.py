@@ -10,6 +10,12 @@ from vllm.v1.engine import EngineCoreRequest
 from vllm.v1.metrics.stats import IterationStats
 
 
+# --------------------------------------------------------------------------------------------------------
+# For the context where I ask a question to chatgpt, and chatgpt may generate two candidate answers
+# for me to choose which is preferred.
+# Then the single prompt spawns a single request, and each candidate answer forks a child request,
+# so that the engine could parallel process the two child requests
+# --------------------------------------------------------------------------------------------------------
 class ParentRequest:
     """Info, state & processing for parallel sampling request.
 
