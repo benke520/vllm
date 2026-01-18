@@ -150,6 +150,10 @@ class RequestState:
         self.stream_interval = stream_interval
         self.sent_tokens_offset = 0  # Offset of sent tokens
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # @classmethod serves a (static) factory method (i.e., alternative constructors)
+    # to construct a RequestState instance. It receives the class(i.e., RequestState) itself as the first parameter
+    # ------------------------------------------------------------------------------------------------------------------
     @classmethod
     def from_new_request(
         cls,
@@ -356,6 +360,10 @@ class RequestState:
         return PoolingOutput(data=pooling_output)
 
 
+# ------------------------------------------------------------------------------------------------------------------------
+# (生母)InputProcessor creates requests from user inputs
+# (养母)OutputProcessor manages requestState companion object to track request processing and generate user facing results
+# ------------------------------------------------------------------------------------------------------------------------
 class OutputProcessor:
     """Process EngineCoreOutputs into RequestOutputs."""
 
