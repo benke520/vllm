@@ -17,7 +17,15 @@ if TYPE_CHECKING:
     from vllm.v1.request import Request, RequestStatus
     from vllm.v1.structured_output import StructuredOutputManager
 
-
+#----------------------------------------------------------------------------------------------------------------------
+# The scheduler is a request lifecycle and resource manager 
+# that decides which requests to execute in each iteration and manages their progress through the system.
+# - Manages request queues - Tracks waiting, running, and finished requests
+# - Makes scheduling decisions - Decides which requests to process and how many tokens to compute for each in every step
+# - Manages resources - Allocates KV cache blocks and manages memory
+# - Updates request states - Processes model outputs and updates request progress
+# - Handles request lifecycle - Adds new requests, finishes/aborts requests, tracks completion
+#----------------------------------------------------------------------------------------------------------------------
 class SchedulerInterface(ABC):
     @abstractmethod
     def __init__(
@@ -32,6 +40,9 @@ class SchedulerInterface(ABC):
     ) -> None:
         raise NotImplementedError
 
+    #----------------------------------------------------------------------------------------------------------
+    # 2. Decide the batch of requests to process in the next timestep
+    #----------------------------------------------------------------------------------------------------------
     @abstractmethod
     def schedule(self) -> "SchedulerOutput":
         """Schedule the requests to process in this scheduling step.
@@ -64,6 +75,9 @@ class SchedulerInterface(ABC):
     ) -> "GrammarOutput | None":
         raise NotImplementedError
 
+    #----------------------------------------------------------------------------------------------------------
+    # 3. Update requests states based on model execution result
+    #----------------------------------------------------------------------------------------------------------
     @abstractmethod
     def update_from_output(
         self,
@@ -108,6 +122,9 @@ class SchedulerInterface(ABC):
         """
         raise NotImplementedError
 
+    #----------------------------------------------------------------------------------------
+    # 1. Accept a new request
+    #----------------------------------------------------------------------------------------
     @abstractmethod
     def add_request(self, request: "Request") -> None:
         """Add a new request to the scheduler's internal queue.
@@ -117,6 +134,9 @@ class SchedulerInterface(ABC):
         """
         raise NotImplementedError
 
+    #----------------------------------------------------------------------------------------
+    # 5. Handle request completion/abortion
+    #----------------------------------------------------------------------------------------
     @abstractmethod
     def finish_requests(
         self,
@@ -137,6 +157,9 @@ class SchedulerInterface(ABC):
         """
         raise NotImplementedError
 
+    #----------------------------------------------------------------------------------------
+    # 4. Track request handling status
+    #----------------------------------------------------------------------------------------
     @abstractmethod
     def get_num_unfinished_requests(self) -> int:
         """Number of unfinished requests in the scheduler's internal queue."""

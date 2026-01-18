@@ -256,7 +256,8 @@ class EngineCoreClient(ABC):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Focus on this the
+# Focus on this simpe llm engine core client than that async inter-process one which make communicaiton
+# between FE (llm.py/llm_engine.py/core_client.py) and BE (core.py)
 # ---------------------------------------------------------------------------------------------------------
 class InprocClient(EngineCoreClient):
     """
