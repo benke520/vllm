@@ -45,7 +45,11 @@ class FinishReason(enum.IntEnum):
     def __str__(self):
         return FINISH_REASON_STRINGS[self.value]
 
-
+#----------------------------------------------------------------------------------------------------------
+# EngineCoreRequest Lightweight data transfer object using msgspec.Struct for efficient serialization
+# Minimal fields containing only the core information needed to create a request
+# This is used to compose the stateful `Request` object that has a complete lifecycle of the request
+#----------------------------------------------------------------------------------------------------------
 class EngineCoreRequest(
     msgspec.Struct,
     array_like=True,  # type: ignore[call-arg]
