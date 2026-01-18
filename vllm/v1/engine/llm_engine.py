@@ -208,6 +208,9 @@ class LLMEngine:
         request_ids = self.output_processor.abort_requests(request_ids, internal)
         self.engine_core.abort_requests(request_ids)
 
+    # -----------------------------------------------------------------------------------------------------------------
+    # LLM engine is just a proxy/agent which extra processing on request before sending to llm engine core client
+    # -----------------------------------------------------------------------------------------------------------------
     def add_request(
         self,
         request_id: str,

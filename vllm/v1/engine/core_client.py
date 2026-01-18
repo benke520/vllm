@@ -256,7 +256,7 @@ class EngineCoreClient(ABC):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Focus on this the
+# Focus on this simple client than the inter-process one
 # ---------------------------------------------------------------------------------------------------------
 class InprocClient(EngineCoreClient):
     """

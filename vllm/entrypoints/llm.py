@@ -424,6 +424,9 @@ class LLM:
         # Add any modality specific loras to the corresponding prompts
         lora_request = self._get_modality_specific_lora_reqs(prompts, lora_request)
 
+        # --------------------------------------------------------------------------------------------------
+        # [1/14/26] Logic entrance to enqueue request to BE
+        # --------------------------------------------------------------------------------------------------
         self._validate_and_add_requests(
             prompts=prompts,
             params=sampling_params,
@@ -1573,7 +1576,7 @@ class LLM:
         added_request_ids: list[str] = []
 
         # ----------------------------------------------------------------------------------------------------------------------
-        # [Ben][1/12/26] This is the entrance that FE llm translate each prompt into a request for the BE llm engine to handle
+        # [1/12/26]Entrance that FE llm translate each prompt into a request for the BE llm engine to handle
         # ----------------------------------------------------------------------------------------------------------------------
         try:
             for i, prompt in enumerate(it):

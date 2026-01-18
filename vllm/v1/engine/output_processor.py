@@ -201,6 +201,10 @@ class RequestState:
             self.stats.arrival_time = update.arrival_time
         self.is_prefilling = True
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # @classmethod serves a (static) factory method (i.e., alternative constructors)
+    # to construct a RequestState instance. It receives the class(i.e., RequestState) itself as the first parameter
+    # ------------------------------------------------------------------------------------------------------------------
     @classmethod
     def from_new_request(
         cls,
@@ -408,6 +412,10 @@ class RequestState:
         return PoolingOutput(data=pooling_output)
 
 
+# ------------------------------------------------------------------------------------------------------------------------
+# (生母)InputProcessor creates requests from user inputs
+# (养母)OutputProcessor manages requestState companion object to track request processing and generate user facing results
+# ------------------------------------------------------------------------------------------------------------------------
 class OutputProcessor:
     """Process EngineCoreOutputs into RequestOutputs."""
 

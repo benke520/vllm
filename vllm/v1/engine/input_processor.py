@@ -451,6 +451,10 @@ class InputProcessor:
         request.external_req_id = request.request_id
         request.request_id = f"{request.external_req_id}-{random_uuid():.8}"
 
+    # -----------------------------------------------------------------------------------------------------
+    # Bundle input prompt and params into a single BE request --> LLM Engine Core Client
+    # Logic includes processing prompt and params like calling tokenization, etc.
+    # -----------------------------------------------------------------------------------------------------
     def process_inputs(
         self,
         request_id: str,
