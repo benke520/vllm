@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from vllm.lora.request import LoRARequest
     from vllm.v1.core.kv_cache_utils import BlockHash
 
-
 @dataclass
 class StreamingUpdate:
     """Lightweight data for streaming session continuation.
@@ -55,7 +54,11 @@ class StreamingUpdate:
             sampling_params=request.sampling_params,
         )
 
-
+#---------------------------------------------------------------------------------------------------------
+# This is the full request entity with extensive state management, 
+# like runtime state(status, events, stop_reason), 
+# token tracking, caching state, scheduling state, error tracking, etc.
+#---------------------------------------------------------------------------------------------------------
 class Request:
     def __init__(
         self,
@@ -170,6 +173,10 @@ class Request:
         # None entry in the queue means finished.
         self.streaming_queue: deque[StreamingUpdate | None] | None = None
 
+    #------------------------------------------------------------------------------------------------------------
+    # This is the factory method that converts a simple stateless EngineCoreRequest to a full stateful Request,
+    # which tracks the complete lifecycle state of a request
+    #------------------------------------------------------------------------------------------------------------
     @classmethod
     def from_engine_core_request(
         cls,

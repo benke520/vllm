@@ -279,6 +279,12 @@ class EngineCore:
     def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
         return self.model_executor.supported_tasks
 
+    #-------------------------------------------------------------------------------------------------------
+    # This is the accept method of the core module, 
+    # which internally further delegate the request to scheduler.
+    # Scheduler is like the secretary of the core module, 
+    # manages core module's calendar to decide which requests to process in each time slot/step
+    #-------------------------------------------------------------------------------------------------------
     def add_request(self, request: Request, request_wave: int = 0):
         """Add request to the scheduler.
 
