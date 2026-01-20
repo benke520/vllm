@@ -23,6 +23,11 @@ from vllm.v1.serial_utils import UtilityResult
 FINISH_REASON_STRINGS = ("stop", "length", "abort", "error")
 
 
+# ----------------------------------------------------------------------------------------------------------------------------
+# Request result enum
+# stop means completed successfully
+# others are finished with incomplete result either due to length restriction, bailed out by client or internal server error
+# ----------------------------------------------------------------------------------------------------------------------------
 class FinishReason(enum.IntEnum):
     """
     Reason a request finished - stop, length, abort, or error.
@@ -45,11 +50,12 @@ class FinishReason(enum.IntEnum):
     def __str__(self):
         return FINISH_REASON_STRINGS[self.value]
 
-#----------------------------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------------------------
 # EngineCoreRequest Lightweight data transfer object using msgspec.Struct for efficient serialization
 # Minimal fields containing only the core information needed to create a request
 # This is used to compose the stateful `Request` object that has a complete lifecycle of the request
-#----------------------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------
 class EngineCoreRequest(
     msgspec.Struct,
     array_like=True,  # type: ignore[call-arg]
@@ -96,6 +102,9 @@ class EngineCoreRequest(
         return self.pooling_params
 
 
+# ------------------------------------------------------------------------------------------------------------
+# Event types that tracks the lifecycle of a request after entering engine core
+# ------------------------------------------------------------------------------------------------------------
 class EngineCoreEventType(enum.IntEnum):
     """The type of engine core request event."""
 
@@ -198,6 +207,9 @@ class EngineCoreOutputs(
             self.timestamp = time.monotonic()
 
 
+# ------------------------------------------------------------------------------------------------------------
+# The commands issued from the engine core client through sockets to engine core
+# ------------------------------------------------------------------------------------------------------------
 class EngineCoreRequestType(enum.Enum):
     """
     Request types defined as hex byte strings, so it can be sent over sockets

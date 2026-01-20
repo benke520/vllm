@@ -44,6 +44,9 @@ logger = init_logger(__name__)
 _R = TypeVar("_R", default=Any)
 
 
+# -----------------------------------------------------------------------------------------------------------------
+# LLM engine is just a proxy/agent which extra processing on request before sending to llm engine core client
+# -----------------------------------------------------------------------------------------------------------------
 class LLMEngine:
     """Legacy LLMEngine for backwards compatibility."""
 

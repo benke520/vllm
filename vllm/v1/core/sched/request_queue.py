@@ -72,6 +72,14 @@ class RequestQueue(ABC):
         pass
 
 
+# --------------------------------------------------------------------------------------------------------------
+# Python allows multiple inheritance, i.e., Child(ParentA, ParentB),
+# and ues the MRO (Method Resolution Order) rule to resolve conflicting methods inherited from ParentA and ParentB,
+# i.e., uses the first method met in ParentA than the second same named method in ParentB.
+# To avoid the confusion, use ParentA as the concrete base class, and ParentB as the abstract interface,
+# which essentially does the same thing as Java and C#, i.e., single inheritance and multiple implementations,
+# and delegate the implemented ParentB methods the inner inherited method from ParentA
+# --------------------------------------------------------------------------------------------------------------
 class FCFSRequestQueue(deque[Request], RequestQueue):
     """A first-come-first-served queue that supports deque operations."""
 
@@ -198,6 +206,9 @@ class PriorityRequestQueue(RequestQueue):
             yield heapq.heappop(heap_copy)
 
 
+# --------------------------------------------------------------------------------------------------------------------------------
+# RequestQueue is the static factory itself that creates different flavors of RequestQueue based on the input policy
+# --------------------------------------------------------------------------------------------------------------------------------
 def create_request_queue(policy: SchedulingPolicy) -> RequestQueue:
     """Create request queue based on scheduling policy."""
     if policy == SchedulingPolicy.PRIORITY:

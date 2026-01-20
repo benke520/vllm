@@ -75,6 +75,17 @@ HANDSHAKE_TIMEOUT_MINS = 5
 _R = TypeVar("_R")  # Return type for collective_rpc
 
 
+# ==========================================================================================================
+# Engine Core Client-Server Architecture Summary
+# ==========================================================================================================
+# | Client                        | Engine Core      | Use Case                                            |
+# |-------------------------------|------------------|-----------------------------------------------------|
+# | InprocClient                  | EngineCore       | Single process, V0-style synchronous API            |
+# |                               |                  | (direct method calls)                               |
+# | SyncMPClient / AsyncMPClient  | EngineCoreProc   | Multi-process with ZMQ sockets                      |
+# |                               |                  | (non-DP or non-MoE DP)                              |
+# | DPAsyncMPClient               | DPEngineCoreProc | Multi-process with Data Parallel + MoE models       |
+# ==========================================================================================================
 class EngineCore:
     """Inner loop of vLLM's Engine."""
 
@@ -279,12 +290,12 @@ class EngineCore:
     def get_supported_tasks(self) -> tuple[SupportedTask, ...]:
         return self.model_executor.supported_tasks
 
-    #-------------------------------------------------------------------------------------------------------
-    # This is the accept method of the core module, 
+    # -------------------------------------------------------------------------------------------------------
+    # This is the accept method of the core module,
     # which internally further delegate the request to scheduler.
-    # Scheduler is like the secretary of the core module, 
+    # Scheduler is like the secretary of the core module,
     # manages core module's calendar to decide which requests to process in each time slot/step
-    #-------------------------------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------------------------------
     def add_request(self, request: Request, request_wave: int = 0):
         """Add request to the scheduler.
 
@@ -372,19 +383,34 @@ class EngineCore:
         )
         self._iteration_index += 1
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # The business logic of the core's loop thread:
+    # Follow the schedule of the scheduler to generate a next token for each request in a batch
+    # This is the synchronous method that needs to finish stepping one batch before stepping on the next batch
+    # ------------------------------------------------------------------------------------------------------------------
     def step(self) -> tuple[dict[int, EngineCoreOutputs], bool]:
         """Schedule, execute, and make output.
 
         Returns tuple of outputs and a flag indicating whether the model
         was executed.
         """
-
+        # --------------------------------------------------------------------------------------------
+        # 1. Retrieve job(batch of input requests) from scheduler
+        # --------------------------------------------------------------------------------------------
         # Check for any requests remaining in the scheduler - unfinished,
         # or finished and not yet removed from the batch.
         if not self.scheduler.has_requests():
             return {}, False
         scheduler_output = self.scheduler.schedule()
+
+        # --------------------------------------------------------------------------------------------
+        # 2. Pass the job into model executor to process it
+        # --------------------------------------------------------------------------------------------
         future = self.model_executor.execute_model(scheduler_output, non_block=True)
+
+        # --------------------------------------------------------------------------------------------
+        # 3. Get the output
+        # --------------------------------------------------------------------------------------------
         grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)
         with (
             self.log_error_detail(scheduler_output),
@@ -413,6 +439,10 @@ class EngineCore:
             if draft_token_ids is not None:
                 self.scheduler.update_draft_token_ids(draft_token_ids)
 
+    # ----------------------------------------------------------------------------------------------------
+    # This is the asynchronous batch processing method, i.e, streamline processing batches than waiting
+    # for one batch stepping finishes until starting the next batch
+    # ----------------------------------------------------------------------------------------------------
     def step_with_batch_queue(
         self,
     ) -> tuple[dict[int, EngineCoreOutputs] | None, bool]:
@@ -441,6 +471,10 @@ class EngineCore:
         deferred_scheduler_output = None
         if self.scheduler.has_requests():
             scheduler_output = self.scheduler.schedule()
+            # ---------------------------------------------------------------------------------------------
+            # This is the core difference from the synchronous step() method.
+            # It uses the async API than the sync API
+            # ---------------------------------------------------------------------------------------------
             exec_future = self.model_executor.execute_model(
                 scheduler_output, non_block=True
             )
@@ -950,6 +984,10 @@ class EngineCoreProc(EngineCore):
     def _init_data_parallel(self, vllm_config: VllmConfig):
         pass
 
+    # --------------------------------------------------------------------------------------------------------------------
+    # This is busy loop of the general use-case EngineCoreProc (DPEngineCoreProce) defines its own specialized loop
+    # It does two jobs: Poll for requests
+    # --------------------------------------------------------------------------------------------------------------------
     def run_busy_loop(self):
         """Core busy loop of the EngineCore."""
 
@@ -960,6 +998,11 @@ class EngineCoreProc(EngineCore):
             # 2) Step the engine core and return the outputs.
             self._process_engine_step()
 
+    # --------------------------------------------------------------------------------------------------------------------
+    # Retrieve input request and delegate its scheduling to scheduler
+    # request flow: engine core client --> input queue --> core --> scheduler which pools request for batch processing
+    #                                    |<====_process_input_queue logic====>|
+    # --------------------------------------------------------------------------------------------------------------------
     def _process_input_queue(self):
         """Exits when an engine step needs to be performed."""
 
@@ -977,6 +1020,10 @@ class EngineCoreProc(EngineCore):
                     logger.debug("EngineCore waiting for work.")
                     waited = True
             req = self.input_queue.get()
+            # ---------------------------------------------------------------------------
+            # The input_queue queues item of type Tuple[EngineCoreRequestType, Any]
+            # So need to unpack the tuple to fit the method arguments
+            # ---------------------------------------------------------------------------
             self._handle_client_request(*req)
 
         if waited:
@@ -987,6 +1034,12 @@ class EngineCoreProc(EngineCore):
             req = self.input_queue.get_nowait()
             self._handle_client_request(*req)
 
+    # --------------------------------------------------------------------------------------------------------------------
+    # Process the batch of requests scheduled for this timestep and output completed requests
+    #
+    # core(scheduler) --> model executor --> output queue --> engine core client
+    # |<=======_process_engine_step logic ==============>|
+    # --------------------------------------------------------------------------------------------------------------------
     def _process_engine_step(self) -> bool:
         """Called only when there are unfinished local requests."""
 
@@ -1246,6 +1299,32 @@ class EngineCoreProc(EngineCore):
         )
 
 
+# -------------------------------------------------------------------------------------------------------------------------------------------------------------
+# DPEngineCoreProc is a specialized version of EngineCoreProc designed for Data Parallel (DP) inference with MoE (Mixture of Experts) models.
+# In data parallelism, multiple EngineCore instances run in parallel, each handling different requests:
+#                           ┌─────────────────────┐
+#                           │    Coordinator /    │
+#                           │    Load Balancer    │
+#                           └──────────┬──────────┘
+#                                      │
+#            ┌─────────────────────────┼─────────────────────────┐
+#            │                         │                         │
+#            ▼                         ▼                         ▼
+# ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
+# │  DPEngineCoreProc   │   │  DPEngineCoreProc   │   │  DPEngineCoreProc   │
+# │     (DP Rank 0)     │   │     (DP Rank 1)     │   │     (DP Rank N)     │
+# │                     │   │                     │   │                     │
+# │  ┌───────────────┐  │   │  ┌───────────────┐  │   │  ┌───────────────┐  │
+# │  │   Scheduler   │  │   │  │   Scheduler   │  │   │  │   Scheduler   │  │
+# │  └───────────────┘  │   │  └───────────────┘  │   │  └───────────────┘  │
+# │  ┌───────────────┐  │   │  ┌───────────────┐  │   │  ┌───────────────┐  │
+# │  │   Executor    │  │   │  │   Executor    │  │   │  │   Executor    │  │
+# │  │   (GPU(s))    │  │◄──┼──┤   (GPU(s))    │──┼──►│  │   (GPU(s))    │  │
+# │  └───────────────┘  │   │  └───────────────┘  │   │  └───────────────┘  │
+# └─────────────────────┘   └─────────────────────┘   └─────────────────────┘
+#                                      │
+#                           All-reduce sync (every 32 steps)
+# -------------------------------------------------------------------------------------------------------------------------------------------------------------
 class DPEngineCoreProc(EngineCoreProc):
     """ZMQ-wrapper for running EngineCore in background process
     in a data parallel context."""

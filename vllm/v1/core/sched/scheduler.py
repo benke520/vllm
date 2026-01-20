@@ -146,6 +146,9 @@ class Scheduler(SchedulerInterface):
         self.pcp_world_size = vllm_config.parallel_config.prefill_context_parallel_size
 
         # req_id -> Request
+        # -------------------------------------------------------------------------------------------------
+        # This is a dictionary that holds all the requests whose lifecycles are managed by scheduler
+        # -------------------------------------------------------------------------------------------------
         self.requests: dict[str, Request] = {}
         # Scheduling policy
         try:
@@ -155,7 +158,13 @@ class Scheduler(SchedulerInterface):
                 f"Unknown scheduling policy: {self.scheduler_config.policy}"
             ) from e
         # Priority queues for requests.
+        # -------------------------------------------------------------------------------
+        # This is a deque that holds requests waiting to be scheduled
+        # -------------------------------------------------------------------------------
         self.waiting = create_request_queue(self.policy)
+        # -------------------------------------------------------------------------------
+        # This is a list that holds requests alrady scheduled and being processed
+        # -------------------------------------------------------------------------------
         self.running: list[Request] = []
 
         # The request IDs that are finished in between the previous and the
@@ -310,6 +319,24 @@ class Scheduler(SchedulerInterface):
                 pass
         return num_new_tokens
 
+    # ----------------------------------------------------------------------------------------------------------
+    # 2. Decide the batch of requests to process in the next timestep
+    # vLLM maintains two pointers: `num_computed_tokens`` and `num_tokens_with_specs`
+    # `num_computed_tokens` is the last committed position whose token has been verified and safe,
+    # no matter if it's prefilled prompt tokens or newly generated and verified output tokens.
+    # While `num_tokens_with_specs` is the last generated output token that needs to be verified
+    #
+    # The analogy with Kafka:
+    # vLLM:
+    # [t0][t1]...[t100][t101][t102][d0][d1][d2]
+    #                         ^              ^
+    #               num_computed_tokens   num_tokens_with_spec
+    #                  (verified)         (including drafts)
+    # Kafka:
+    # [msg0][msg1][msg2][msg3][msg4][msg5][msg6]
+    #                          ^HW          ^LEO (leader)
+    #                     (committed)   (unconfirmed)
+    # ----------------------------------------------------------------------------------------------------------
     def schedule(self) -> SchedulerOutput:
         # NOTE(woosuk) on the scheduling algorithm:
         # There's no "decoding phase" nor "prefill phase" in the scheduler.
@@ -1614,6 +1641,9 @@ class Scheduler(SchedulerInterface):
         """Returns (num_running_reqs, num_waiting_reqs)."""
         return len(self.running), len(self.waiting)
 
+    # ----------------------------------------------------------------------------------------
+    # 1. Accept a new request
+    # ----------------------------------------------------------------------------------------
     def add_request(self, request: Request) -> None:
         existing = self.requests.get(request.request_id)
         if existing is not None:
