@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from vllm.lora.request import LoRARequest
     from vllm.v1.core.kv_cache_utils import BlockHash
 
+
 @dataclass
 class StreamingUpdate:
     """Lightweight data for streaming session continuation.
@@ -54,11 +55,12 @@ class StreamingUpdate:
             sampling_params=request.sampling_params,
         )
 
-#---------------------------------------------------------------------------------------------------------
-# This is the full request entity with extensive state management, 
-# like runtime state(status, events, stop_reason), 
+
+# ---------------------------------------------------------------------------------------------------------
+# This is the full request entity with extensive state management,
+# like runtime state(status, events, stop_reason),
 # token tracking, caching state, scheduling state, error tracking, etc.
-#---------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------
 class Request:
     def __init__(
         self,
@@ -98,6 +100,9 @@ class Request:
         # P/D: Connector-specific KV transfer parameters.
         self.kv_transfer_params: dict[str, Any] | None = None
 
+        # -------------------------------------------------------------------------------------------------------
+        # max_token means the max number of output tokens allowed for this request
+        # -------------------------------------------------------------------------------------------------------
         if pooling_params is not None:
             # Pooling models.
             self.max_tokens = 1
@@ -121,6 +126,9 @@ class Request:
             prompt_token_ids, prompt_embeds
         )
         self._output_token_ids: list[int] = []
+        # -----------------------------------------------------------------------------------------------
+        # Records all the verified tokens (prompt input tokens + generated accepted output tokens)
+        # -----------------------------------------------------------------------------------------------
         self._all_token_ids: list[int] = (
             self.prompt_token_ids.copy()
             if self.prompt_token_ids is not None
@@ -133,6 +141,27 @@ class Request:
         self.discard_latest_async_tokens = False
 
         self.spec_token_ids: list[int] = []
+        # --------------------------------------------------------------------------------------
+        # num_computed_tokens: Tracks how many tokens have KV cache computed.
+        #
+        # SYNC SCHEDULING:
+        #   - Each batch completes before scheduling the next batch.
+        #   - num_computed_tokens = true verified tokens (prompt + accepted outputs).
+        #   - Internally, it's optimistically advanced after scheduling, then rolled
+        #     back by num_rejected on verification. But since we wait for output
+        #     before the next schedule(), the scheduler always sees the true value.
+        #
+        # ASYNC SCHEDULING:
+        #   - Next batch can be scheduled while current batch is still in GPU execution.
+        #   - num_computed_tokens = verified tokens + in-flight placeholders.
+        #   - num_output_placeholders tracks unverified in-flight tokens.
+        #   - True verified position = num_computed_tokens - num_output_placeholders.
+        #   - When output arrives: num_computed_tokens -= num_rejected,
+        #     and num_output_placeholders -= num_tokens_received.
+        #
+        # With speculative decoding, each step adds (1 + k) placeholders (bonus + k drafts).
+        # Without speculative decoding, each step adds at most 1 placeholder.
+        # --------------------------------------------------------------------------------------
         self.num_computed_tokens = 0
         self.cache_salt: str | None = cache_salt
 
@@ -173,10 +202,10 @@ class Request:
         # None entry in the queue means finished.
         self.streaming_queue: deque[StreamingUpdate | None] | None = None
 
-    #------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------
     # This is the factory method that converts a simple stateless EngineCoreRequest to a full stateful Request,
     # which tracks the complete lifecycle state of a request
-    #------------------------------------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------------------------------------
     @classmethod
     def from_engine_core_request(
         cls,
@@ -219,14 +248,23 @@ class Request:
     def use_structured_output(self) -> bool:
         return self.structured_output_request is not None
 
+    # -----------------------------------------------------------------------------------------------
+    # Length of all the _verified_ tokens (prompt input tokens + generated accepted output tokens)
+    # -----------------------------------------------------------------------------------------------
     @property
     def num_tokens(self) -> int:
         return len(self._all_token_ids)
 
+    # -----------------------------------------------------------------------------------------------
+    # Length of all the _verified_ tokens + verify_pending tokens
+    # -----------------------------------------------------------------------------------------------
     @property
     def num_tokens_with_spec(self) -> int:
         return len(self._all_token_ids) + len(self.spec_token_ids)
 
+    # -----------------------------------------------------------------------------------------------
+    # Length of all the verified output tokens
+    # -----------------------------------------------------------------------------------------------
     @property
     def num_output_tokens(self) -> int:
         return len(self._output_token_ids)

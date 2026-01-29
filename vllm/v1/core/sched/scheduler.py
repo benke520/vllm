@@ -320,8 +320,12 @@ class Scheduler(SchedulerInterface):
         return num_new_tokens
 
     # ----------------------------------------------------------------------------------------------------------
-    # 2. Decide the batch of requests to process in the next timestep
-    # vLLM maintains two pointers: `num_computed_tokens`` and `num_tokens_with_specs`
+    # 2. Decide the batch of requests to process in the next timestep.
+    #
+    # This understanding applies to sync scheduling and doesn't apply to async scheduling.
+    # It ensures enough compute resources are allocated to close the gap
+    # between done indexed by `num_computed_tokens` and total work indexed by `num_tokens_with_specs`
+    # vLLM maintains two pointers: `num_computed_tokens` and `num_tokens_with_specs`
     # `num_computed_tokens` is the last committed position whose token has been verified and safe,
     # no matter if it's prefilled prompt tokens or newly generated and verified output tokens.
     # While `num_tokens_with_specs` is the last generated output token that needs to be verified
@@ -336,7 +340,39 @@ class Scheduler(SchedulerInterface):
     # [msg0][msg1][msg2][msg3][msg4][msg5][msg6]
     #                          ^HW          ^LEO (leader)
     #                     (committed)   (unconfirmed)
-    # ----------------------------------------------------------------------------------------------------------
+    #
+    # For async scheduling,
+    # Step 1: Schedule with spec decode (k=5)
+    #         ┌───────────────────────────────────────────────────────────┐
+    #         │ [verified tokens]                    [placeholders (6)]   │
+    #         │                                       1 bonus + 5 spec    │
+    #         │ ←────────────────── num_computed_tokens ─────────────────→│
+    #         │                                      ←─ placeholders ────→│
+    #         └───────────────────────────────────────────────────────────┘
+    #
+    # Step 2: Output arrives - 3 accepted, 2 rejected
+    #         Before adjustment:
+    #         │ num_computed_tokens = X (includes 6 placeholders)
+    #         │ num_output_placeholders = 6
+    #
+    #         Adjustments:
+    #         │ num_computed_tokens -= 2 (rejected spec tokens)      [scheduler.py:1326]
+    #         │ num_output_placeholders -= 4 (actual tokens received) [async_scheduler.py:58]
+
+    #         After adjustment:
+    #         │ num_computed_tokens = X - 2
+    #         │ num_output_placeholders = 2 (if more in-flight, or 0 if settled)
+    #
+    # Step 3: Fully settled (no more in-flight)
+    #         ┌─────────────────────────────────────────────┐
+    #         │ [all verified tokens]                       │
+    #         │ ←────── num_computed_tokens ───────────────→│
+    #         │                     num_output_placeholders = 0
+    #         └─────────────────────────────────────────────┘
+    #
+    # So in sync scheduling, num_computed_tokens is a pointer that strictly moves forward,
+    # while in async scheduling, num_computed_tokens becomes a pointer that can optimistic advance(expand) then rollback(squeeze)
+    # ----------------------------------------------------------------------------------------------------------------------------
     def schedule(self) -> SchedulerOutput:
         # NOTE(woosuk) on the scheduling algorithm:
         # There's no "decoding phase" nor "prefill phase" in the scheduler.
